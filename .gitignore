@@ -1,0 +1,19 @@
+# Build output
+bin/
+dist/
+
+# Test coverage
+cover.out
+cover.html
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
