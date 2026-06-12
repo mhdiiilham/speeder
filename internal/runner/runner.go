@@ -51,6 +51,13 @@ type Result struct {
 	JitterMs  float64
 	Download  PhaseResult
 	Upload    PhaseResult
+	ISP       string // populated externally from ipinfo
+	ClientIP  string // populated externally from ipinfo
+}
+
+// PingOnly reports whether this result has no download/upload data.
+func (r *Result) PingOnly() bool {
+	return r.Download.Bytes == 0 && r.Upload.Bytes == 0
 }
 
 // Config controls how tests are run.
@@ -60,6 +67,7 @@ type Config struct {
 	CVThreshold float64       // coefficient of variation threshold for early stop
 	MinDuration time.Duration // minimum time before convergence is checked
 	WindowSize  int           // number of ticks in the sliding CV window
+	PingOnly    bool          // skip download/upload, measure latency only
 	OnProgress  func(phase string, mbps float64)
 }
 
@@ -117,11 +125,21 @@ func (r *Runner) Run(ctx context.Context, cfg Config) (*Result, error) {
 		return nil, fmt.Errorf("ping: %w", err)
 	}
 
+	result := &Result{
+		Server:    server,
+		LatencyMs: float64(avgLat.Microseconds()) / 1000.0,
+		JitterMs:  float64(jitter.Microseconds()) / 1000.0,
+	}
+
+	if cfg.PingOnly {
+		return result, nil
+	}
+
 	dlCh, err := r.speed.Download(ctx, server.DownloadURL)
 	if err != nil {
 		return nil, fmt.Errorf("start download: %w", err)
 	}
-	dlResult := runPhase(ctx, dlCh, cfg, func(mbps float64) {
+	result.Download = runPhase(ctx, dlCh, cfg, func(mbps float64) {
 		if cfg.OnProgress != nil {
 			cfg.OnProgress("download", mbps)
 		}
@@ -131,19 +149,13 @@ func (r *Runner) Run(ctx context.Context, cfg Config) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("start upload: %w", err)
 	}
-	ulResult := runPhase(ctx, ulCh, cfg, func(mbps float64) {
+	result.Upload = runPhase(ctx, ulCh, cfg, func(mbps float64) {
 		if cfg.OnProgress != nil {
 			cfg.OnProgress("upload", mbps)
 		}
 	})
 
-	return &Result{
-		Server:    server,
-		LatencyMs: float64(avgLat.Microseconds()) / 1000.0,
-		JitterMs:  float64(jitter.Microseconds()) / 1000.0,
-		Download:  dlResult,
-		Upload:    ulResult,
-	}, nil
+	return result, nil
 }
 
 func (r *Runner) resolveServer(ctx context.Context, host string) (Server, error) {

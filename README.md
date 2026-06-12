@@ -45,6 +45,11 @@ Neither is objectively "better" — they measure different things against differ
 
 - **Speed test** — adaptive early stopping (CV < 3%), minimal data usage
 - **Game ping** — check CS2 and Dota 2 server latency, jitter, packet loss, and gaming score before queuing
+- **ISP + public IP** — automatically detected and shown alongside results
+- **History** — every result saved to `~/.speeder/history.jsonl`; view with `speeder history`
+- **`--ping-only`** — latency/jitter only, no download/upload, uses ~0 data
+- **`--watch 5m`** — repeat test on an interval, great for monitoring unstable connections
+- **`--fail-if-below 50mbps`** — exit code 1 if download is below threshold, scriptable for health checks
 - `--quick` preset: 4 s max, typically < 35 MB total
 - JSON output for scripting
 - Zero config, no account, no API key
@@ -85,23 +90,70 @@ chmod +x speeder && sudo mv speeder /usr/local/bin/
 ```
 speeder [flags]
 
-  --list            list nearby M-Lab servers and exit
-  --server string   use a specific server hostname
-  --json            output results as JSON to stdout
-  --no-progress     disable live progress updates
-  --duration int    max seconds per test phase (default 8)
-  --quick           quick preset: 4 s max, minimal data usage
-  --game string     check game server latency: cs2, dota2
-  --version         print version and exit
+  --list              list nearby M-Lab servers and exit
+  --server string     use a specific server hostname
+  --json              output results as JSON to stdout
+  --no-progress       disable live progress updates
+  --duration int      max seconds per test phase (default 8)
+  --quick             quick preset: 4 s max, minimal data usage
+  --ping-only         measure latency/jitter only, skip download/upload
+  --fail-if-below N   exit 1 if download < N Mbps (e.g. 50 or 50mbps)
+  --watch duration    repeat on an interval (e.g. 5m, 30s, 1h)
+  --game string       check game server latency: cs2, dota2
+  --version           print version and exit
+
+speeder history [flags]
+
+  --last int          number of results to show (default 10)
+  --json              output raw JSONL
 ```
 
 ### Speed test
 
 ```bash
-speeder                   # auto-selects nearest M-Lab server
-speeder --quick           # less data, faster result
+speeder                        # full test, auto-selects nearest server
+speeder --quick                # less data, faster result
+speeder --ping-only            # latency/jitter only, ~0 data
 speeder --json | jq .download_mbps
+speeder --fail-if-below 50     # exits 1 if download < 50 Mbps
+speeder --watch 5m             # repeat every 5 minutes until Ctrl-C
 speeder --no-progress --json >> speedlog.jsonl
+```
+
+Example output:
+
+```
+  Server:    ndt-mlab1-sin01.mlab-oti.measurement-lab.org
+  Location:  Singapore SG
+  ISP:       Maxis Broadband Sdn Bhd  (203.115.x.x)
+
+  Latency:   14.2 ms  jitter: 0.9 ms
+  Download:  94.71 Mbps  (3.1s, 36.8 MB)
+  Upload:    23.10 Mbps  (2.8s,  8.1 MB)
+
+  Data used: 44.9 MB
+```
+
+### History
+
+Results are automatically saved to `~/.speeder/history.jsonl` after every run.
+
+```bash
+speeder history           # show last 10 results
+speeder history --last 30
+speeder history --json    # raw JSONL for scripting
+```
+
+```
+  Speed Test History
+
+  TIME              SERVER                   DOWNLOAD    UPLOAD    LATENCY
+  ─────────────────────────────────────────────────────────────────────────
+  Jun 12 10:00     ndt-mlab1-sin01...        94.7 Mbps  23.1 Mbps  14.2 ms
+  Jun 11 22:30     ndt-mlab1-sin01...        88.3 Mbps  21.4 Mbps  15.1 ms
+  Jun 11 18:15     ndt-mlab1-sin01...       102.1 Mbps  24.9 Mbps  13.8 ms
+  ─────────────────────────────────────────────────────────────────────────
+  3 result(s) total.
 ```
 
 ### Game server check
@@ -178,6 +230,20 @@ speeder --game dota          # same as --game dota2
   "data_used_mb": 44.9
 }
 ```
+
+## Privacy
+
+speeder makes outbound connections to three services:
+
+| Service | What it's used for | Data collected |
+|---|---|---|
+| **M-Lab** (`measurementlab.net`) | Server discovery and speed test | Your IP, test results — published as [open data](https://www.measurementlab.net/data/) |
+| **ipinfo.io** | ISP name and public IP lookup | Your IP address, timestamp, User-Agent |
+| **Valve** (`steamserver.net`) | CS2/Dota 2 game ping only | TCP connection metadata |
+
+**On ipinfo.io:** it is a commercial service that logs requests and may use them for analytics. The ISP lookup is a best-effort convenience feature — no account or API key is required, and speeder sends only a standard HTTP request with no personal data beyond your IP. If you prefer not to contact ipinfo.io, the feature still works as expected; ISP and IP fields will just be empty in the output.
+
+M-Lab's data collection is worth knowing about: all ndt7 test results (your IP, speed, location) are published publicly as open research data. This is by design — it's how M-Lab tracks global internet health. If you need private results, use `--no-progress --json` and pipe the output locally without the data reaching M-Lab's archives... though the test itself still runs against their servers.
 
 ## Data usage (speed test)
 
