@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -18,7 +19,20 @@ import (
 	"github.com/mhdiiilham/speeder/internal/runner"
 )
 
+// version is set at build time via -ldflags "-X main.version=vX.Y.Z" (release CI).
+// For "go install pkg@version" builds, ldflags are unavailable so we fall back to
+// the module version that the Go toolchain embeds automatically in the binary.
 var version = "dev"
+
+func getVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
+}
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -50,7 +64,7 @@ func run(args []string) int {
 	}
 
 	if *flagVersion {
-		fmt.Fprintf(os.Stdout, "speeder %s\n", version)
+		fmt.Fprintf(os.Stdout, "speeder %s\n", getVersion())
 		return 0
 	}
 
