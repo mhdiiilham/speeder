@@ -2,12 +2,15 @@ package display
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/mhdiiilham/speeder/internal/game"
 	"github.com/mhdiiilham/speeder/internal/runner"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -122,4 +125,56 @@ func TestFormatDuration(t *testing.T) {
 	assert.Equal(t, "3.1s", FormatDuration(3100*time.Millisecond))
 	assert.Equal(t, "0.0s", FormatDuration(0))
 	assert.True(t, strings.HasSuffix(FormatDuration(1*time.Second), "s"))
+}
+
+// ---- PrintGameResults ----
+
+type mockGame struct {
+	name string
+	note string
+}
+
+func (g *mockGame) Name() string { return g.name }
+func (g *mockGame) Note() string { return g.note }
+func (g *mockGame) Servers(_ context.Context) ([]game.Server, error) { return nil, nil }
+
+func sampleGameResults() []game.PingResult {
+	return []game.PingResult{
+		{Region: "AP", City: "Singapore", LatencyMs: 12, JitterMs: 1, PacketLoss: 0, Score: 97, Rating: game.RatingExcellent, Best: true},
+		{Region: "AP", City: "Tokyo", LatencyMs: 45, JitterMs: 4, PacketLoss: 0, Score: 72, Rating: game.RatingGood},
+		{Region: "EU", City: "Frankfurt", LatencyMs: 200, JitterMs: 15, PacketLoss: 5, Score: 8, Rating: game.RatingVeryPoor},
+		{Region: "??", City: "Unreachable", Err: errors.New("timeout"), Rating: game.RatingUnknown},
+	}
+}
+
+func TestPrintGameResults(t *testing.T) {
+	g := &mockGame{name: "CS2", note: "Test note about SDR"}
+	var buf bytes.Buffer
+	PrintGameResults(&buf, g, sampleGameResults())
+	out := buf.String()
+
+	assert.Contains(t, out, "CS2 Server Latency")
+	assert.Contains(t, out, "Singapore")
+	assert.Contains(t, out, "12")
+	assert.Contains(t, out, "✓")
+	assert.Contains(t, out, "Frankfurt")
+	assert.Contains(t, out, "Unreachable")
+	assert.Contains(t, out, "Verdict:")
+	assert.Contains(t, out, "Test note about SDR")
+}
+
+func TestPrintGameResults_NoNote(t *testing.T) {
+	g := &mockGame{name: "TestGame", note: ""}
+	var buf bytes.Buffer
+	PrintGameResults(&buf, g, sampleGameResults())
+	// Should not panic or emit an empty note section.
+	assert.Contains(t, buf.String(), "TestGame")
+}
+
+func TestPrintGameResults_Empty(t *testing.T) {
+	g := &mockGame{name: "TestGame"}
+	var buf bytes.Buffer
+	// Single unreachable result — should still render without panic.
+	PrintGameResults(&buf, g, []game.PingResult{{Err: errors.New("down")}})
+	assert.Contains(t, buf.String(), "TestGame")
 }

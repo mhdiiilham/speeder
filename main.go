@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/mhdiiilham/speeder/internal/display"
+	"github.com/mhdiiilham/speeder/internal/game"
 	"github.com/mhdiiilham/speeder/internal/runner"
 )
 
@@ -30,6 +32,7 @@ func run(args []string) int {
 	flagDuration   := fs.Int("duration", 8, "max seconds per test phase")
 	flagQuick      := fs.Bool("quick", false, "quick preset: 4s max, minimal data usage")
 	flagVersion    := fs.Bool("version", false, "print version and exit")
+	flagGame       := fs.String("game", "", "check game server latency: cs2, dota2")
 
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -42,6 +45,11 @@ func run(args []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Game ping mode.
+	if *flagGame != "" {
+		return runGameCheck(ctx, *flagGame)
+	}
 
 	r := runner.Default()
 
@@ -75,6 +83,45 @@ func run(args []string) int {
 
 	display.PrintResult(os.Stdout, result)
 	return 0
+}
+
+// runGameCheck resolves the game name, pings all servers, and prints results.
+func runGameCheck(ctx context.Context, gameName string) int {
+	g, err := resolveGame(gameName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "  Available games: cs2, dota2\n")
+		return 1
+	}
+
+	fmt.Fprintf(os.Stderr, "  Pinging %s servers...\n", g.Name())
+
+	p := &game.TCPGamePinger{}
+	results, err := game.Check(ctx, g, p, 10)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+
+	const maxServers = 5
+	if len(results) > maxServers {
+		results = results[:maxServers]
+	}
+
+	display.PrintGameResults(os.Stdout, g, results)
+	return 0
+}
+
+// resolveGame maps a CLI name to a Game implementation.
+func resolveGame(name string) (game.Game, error) {
+	switch strings.ToLower(name) {
+	case "cs2", "cs", "counter-strike":
+		return game.NewCS2(), nil
+	case "dota2", "dota":
+		return game.NewDota2(), nil
+	default:
+		return nil, fmt.Errorf("unknown game %q", name)
+	}
 }
 
 // buildConfig constructs a runner.Config from parsed CLI values.
