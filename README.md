@@ -77,6 +77,14 @@ Download the latest binary for your platform from the [Releases page](https://gi
 | macOS (Intel) | `speeder-darwin-amd64` |
 | Windows amd64 | `speeder-windows-amd64.exe` |
 
+### Windows (PowerShell one-liner)
+
+```powershell
+irm https://raw.githubusercontent.com/mhdiiilham/speeder/main/install.ps1 | iex
+```
+
+Downloads the correct binary for your architecture, installs it to `%LOCALAPPDATA%\speeder\`, and adds it to your user `PATH` — no admin rights required. Open a new terminal after installing, then run `speeder`.
+
 ### macOS / Linux (curl one-liner)
 
 ```bash
