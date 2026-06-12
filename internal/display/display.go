@@ -9,6 +9,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mhdiiilham/speeder/internal/game"
+	"github.com/mhdiiilham/speeder/internal/history"
 	"github.com/mhdiiilham/speeder/internal/runner"
 )
 
@@ -22,25 +23,72 @@ var (
 
 // PrintResult writes a human-readable summary of r to w.
 func PrintResult(w io.Writer, r *runner.Result) {
-	dlMB := float64(r.Download.Bytes) / 1e6
-	ulMB := float64(r.Upload.Bytes) / 1e6
-	totalMB := dlMB + ulMB
-
 	fmt.Fprintln(w)
 	bold.Fprintf(w, "  Server:    %s\n", r.Server.Hostname)
 	if r.Server.City != "" || r.Server.Country != "" {
 		dim.Fprintf(w, "  Location:  %s %s\n", r.Server.City, r.Server.Country)
 	}
+	if r.ISP != "" || r.ClientIP != "" {
+		dim.Fprintf(w, "  ISP:       %s  (%s)\n", r.ISP, r.ClientIP)
+	}
 	fmt.Fprintln(w)
 	cyan.Fprintf(w, "  Latency:   %.1f ms", r.LatencyMs)
 	dim.Fprintf(w, "  jitter: %.1f ms\n", r.JitterMs)
-	green.Fprintf(w, "  Download:  %.2f Mbps", r.Download.SpeedMbps)
-	dim.Fprintf(w, "  (%.1fs, %.1f MB)\n", r.Download.Duration.Seconds(), dlMB)
-	amber.Fprintf(w, "  Upload:    %.2f Mbps", r.Upload.SpeedMbps)
-	dim.Fprintf(w, "  (%.1fs, %.1f MB)\n", r.Upload.Duration.Seconds(), ulMB)
+
+	if !r.PingOnly() {
+		dlMB := float64(r.Download.Bytes) / 1e6
+		ulMB := float64(r.Upload.Bytes) / 1e6
+		green.Fprintf(w, "  Download:  %.2f Mbps", r.Download.SpeedMbps)
+		dim.Fprintf(w, "  (%.1fs, %.1f MB)\n", r.Download.Duration.Seconds(), dlMB)
+		amber.Fprintf(w, "  Upload:    %.2f Mbps", r.Upload.SpeedMbps)
+		dim.Fprintf(w, "  (%.1fs, %.1f MB)\n", r.Upload.Duration.Seconds(), ulMB)
+		fmt.Fprintln(w)
+		dim.Fprintf(w, "  Data used: %.1f MB\n", float64(r.Download.Bytes+r.Upload.Bytes)/1e6)
+	}
 	fmt.Fprintln(w)
-	dim.Fprintf(w, "  Data used: %.1f MB\n", totalMB)
+}
+
+// PrintWatchHeader prints a separator line before each watch iteration.
+func PrintWatchHeader(w io.Writer, run int, t time.Time) {
 	fmt.Fprintln(w)
+	bold.Fprintf(w, "  Run %d  •  %s\n", run, t.Format("Jan 02 15:04:05"))
+	fmt.Fprintln(w, "  "+strings.Repeat("─", 40))
+}
+
+// PrintHistory writes a summary table of historical records to w.
+func PrintHistory(w io.Writer, records []history.Record, total int) {
+	if len(records) == 0 {
+		fmt.Fprintln(w)
+		dim.Fprint(w, "  No history yet. Run speeder to record your first result.\n\n")
+		return
+	}
+	const colFmt = "  %-17s  %-22s  %10s  %9s  %8s\n"
+	fmt.Fprintln(w)
+	bold.Fprintf(w, "  Speed Test History\n")
+	fmt.Fprintln(w)
+	dim.Fprintf(w, colFmt, "TIME", "SERVER", "DOWNLOAD", "UPLOAD", "LATENCY")
+	fmt.Fprintln(w, "  "+strings.Repeat("─", 75))
+	for _, r := range records {
+		dl := fmt.Sprintf("%.1f Mbps", r.DownloadMbps)
+		ul := fmt.Sprintf("%.1f Mbps", r.UploadMbps)
+		lat := fmt.Sprintf("%.1f ms", r.LatencyMs)
+		if r.PingOnly {
+			dl, ul = "—", "—"
+		}
+		server := r.Server
+		if len(server) > 22 {
+			server = server[:19] + "..."
+		}
+		fmt.Fprintf(w, colFmt,
+			r.Timestamp.Local().Format("Jan 02 15:04"),
+			server, dl, ul, lat)
+	}
+	fmt.Fprintln(w, "  "+strings.Repeat("─", 75))
+	if total > len(records) {
+		dim.Fprintf(w, "\n  Showing last %d of %d results.\n\n", len(records), total)
+	} else {
+		dim.Fprintf(w, "\n  %d result(s) total.\n\n", total)
+	}
 }
 
 // PrintServerList writes a table of servers to w.
@@ -61,16 +109,20 @@ type JSONResult struct {
 		City     string `json:"city"`
 		Country  string `json:"country"`
 	} `json:"server"`
+	ISP          string  `json:"isp,omitempty"`
+	ClientIP     string  `json:"client_ip,omitempty"`
 	LatencyMs    float64 `json:"latency_ms"`
 	JitterMs     float64 `json:"jitter_ms"`
-	DownloadMbps float64 `json:"download_mbps"`
-	UploadMbps   float64 `json:"upload_mbps"`
-	DataUsedMB   float64 `json:"data_used_mb"`
+	DownloadMbps float64 `json:"download_mbps,omitempty"`
+	UploadMbps   float64 `json:"upload_mbps,omitempty"`
+	DataUsedMB   float64 `json:"data_used_mb,omitempty"`
 }
 
 // ToJSON converts a runner.Result to the JSON wire format.
 func ToJSON(r *runner.Result) JSONResult {
 	j := JSONResult{
+		ISP:          r.ISP,
+		ClientIP:     r.ClientIP,
 		LatencyMs:    r.LatencyMs,
 		JitterMs:     r.JitterMs,
 		DownloadMbps: r.Download.SpeedMbps,
@@ -86,6 +138,11 @@ func ToJSON(r *runner.Result) JSONResult {
 // PrintJSON encodes r as JSON to w.
 func PrintJSON(w io.Writer, r *runner.Result) error {
 	return json.NewEncoder(w).Encode(ToJSON(r))
+}
+
+// MarshalHistoryRecord encodes a history record as JSON bytes.
+func MarshalHistoryRecord(r history.Record) ([]byte, error) {
+	return json.Marshal(r)
 }
 
 // FormatDuration returns a human-friendly elapsed time string.
