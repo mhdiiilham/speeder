@@ -6,6 +6,7 @@ import (
 
 	"github.com/mhdiiilham/speeder/internal/runner"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBuildConfig_Defaults(t *testing.T) {
@@ -52,4 +53,33 @@ func TestRun_Version(t *testing.T) {
 func TestRun_InvalidFlag(t *testing.T) {
 	code := run([]string{"--not-a-real-flag"})
 	assert.Equal(t, 2, code)
+}
+
+func TestResolveGame(t *testing.T) {
+	tests := []struct {
+		input   string
+		wantErr bool
+		wantName string
+	}{
+		{"cs2", false, "CS2"},
+		{"CS2", false, "CS2"},
+		{"cs", false, "CS2"},
+		{"counter-strike", false, "CS2"},
+		{"dota2", false, "Dota 2"},
+		{"dota", false, "Dota 2"},
+		{"valorant", true, ""},
+		{"minecraft", true, ""},
+		{"", true, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			g, err := resolveGame(tc.input)
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantName, g.Name())
+		})
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/mhdiiilham/speeder/internal/game"
 	"github.com/mhdiiilham/speeder/internal/runner"
 )
 
@@ -90,4 +91,70 @@ func PrintJSON(w io.Writer, r *runner.Result) error {
 // FormatDuration returns a human-friendly elapsed time string.
 func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1fs", d.Seconds())
+}
+
+// PrintGameResults writes the server latency table and verdict for a game check.
+func PrintGameResults(w io.Writer, g game.Game, results []game.PingResult) {
+	const colFmt = "  %-22s  %7s  %6s  %5s  %3s  %s\n"
+	divider := "  " + strings.Repeat("─", 60)
+
+	fmt.Fprintln(w)
+	bold.Fprintf(w, "  %s Server Latency\n", g.Name())
+	fmt.Fprintln(w)
+	dim.Fprintf(w, colFmt, "SERVER", "PING", "JITTER", "LOSS", "SCR", "STATUS")
+	fmt.Fprintln(w, divider)
+
+	for _, r := range results {
+		serverLabel := fmt.Sprintf("%s [%s]", r.City, r.Region)
+		if r.Err != nil {
+			dim.Fprintf(w, colFmt, serverLabel, "—", "—", "—", "—", "Unreachable")
+			continue
+		}
+
+		latStr := fmt.Sprintf("%d ms", int(r.LatencyMs))
+		jitStr := fmt.Sprintf("%d ms", int(r.JitterMs))
+		lossStr := fmt.Sprintf("%.0f%%", r.PacketLoss)
+		scoreStr := fmt.Sprintf("%d", r.Score)
+
+		statusStr := string(r.Rating)
+		if r.Best {
+			statusStr += " ✓"
+		}
+
+		colorFn := ratingColor(r.Rating)
+		colorFn.Fprintf(w, colFmt, serverLabel, latStr, jitStr, lossStr, scoreStr, statusStr)
+	}
+
+	fmt.Fprintln(w, divider)
+
+	// Verdict
+	var best game.PingResult
+	if len(results) > 0 {
+		best = results[0]
+	}
+	fmt.Fprintln(w)
+	bold.Fprintf(w, "  Verdict: ")
+	fmt.Fprintln(w, game.Verdict(g.Name(), best))
+
+	// Game-specific note
+	if note := g.Note(); note != "" {
+		fmt.Fprintln(w)
+		dim.Fprintf(w, "  %s\n", note)
+	}
+	fmt.Fprintln(w)
+}
+
+func ratingColor(r game.Rating) *color.Color {
+	switch r {
+	case game.RatingExcellent:
+		return green
+	case game.RatingGood:
+		return color.New(color.FgGreen)
+	case game.RatingPlayable:
+		return amber
+	case game.RatingPoor:
+		return color.New(color.FgRed)
+	default:
+		return dim
+	}
 }
