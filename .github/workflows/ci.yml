@@ -21,10 +21,10 @@ jobs:
         run: go mod download
 
       - name: Vet
-        run: go vet $(go list ./... | grep -v '/ui$')
+        run: go vet . ./internal/...
 
       - name: Test
-        run: go test -race -coverprofile=coverage.out $(go list ./... | grep -v '/ui$')
+        run: go test -race -coverprofile=coverage.out . ./internal/...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
