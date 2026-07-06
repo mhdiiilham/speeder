@@ -87,20 +87,9 @@ jobs:
           VERSION=${GITHUB_REF_NAME}
           wails build -ldflags "-X main.version=${VERSION} -s -w" -clean
           mkdir -p ../dist
-          cp -r build/bin/* ../dist/
-
-      - name: Rename artifacts
-        shell: bash
-        run: |
-          cd ../dist
-          for f in Speeder*; do
-            ext=""
-            case "$f" in
-              *.exe) ext=".exe";;
-              *.app) ext=".app";;
-            esac
-            mv "$f" "speeder-desktop-${{ matrix.label }}${ext}"
-          done
+          exe=$(find . -name "*.exe" -not -path "./frontend/*" | head -1)
+          echo "Built binary: $exe"
+          cp "$exe" "../dist/speeder-desktop-${{ matrix.label }}.exe"
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
