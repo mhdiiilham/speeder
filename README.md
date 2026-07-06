@@ -41,6 +41,29 @@ Both tools measure internet speed — they just make different trade-offs.
 
 Neither is objectively "better" — they measure different things against different server networks, so results will naturally differ. speeder is a good fit if you want a lightweight, scriptable, open-source tool with no account required. Ookla is the right choice when you need a result that's widely recognised or when comparing against an ISP's advertised speeds using their preferred benchmark.
 
+## Desktop App (Windows)
+
+Speeder ships a native Windows desktop app — a dark-mode GUI built for gamers.
+
+**Download:** grab `speeder-desktop-windows-amd64.exe` from the [Releases page](https://github.com/mhdiiilham/speeder/releases) and run it — no install required.
+
+**What's in the app:**
+
+- **Speed Test** — large live gauge, phase stepper (Connect → Ping → Download → Upload), hero download/upload numbers on completion
+- **Game Check** — pick CS2 or Dota 2, see every server's latency/jitter/packet loss on a world map, then launch the game directly from the best-server card
+- **History** — chart and table of all past speed tests
+- **Dashboard** — at-a-glance last result with latency colour coding (green < 20 ms, amber < 60 ms, red ≥ 60 ms)
+
+**Build from source (requires [Wails v2](https://wails.io) and Node 24):**
+
+```bash
+cd ui
+wails build
+# → build/bin/Speeder.exe
+```
+
+---
+
 ## Features
 
 - **Speed test** — adaptive early stopping (CV < 3%), minimal data usage
