@@ -1,4 +1,5 @@
 BINARY  := speeder
+APP     := Speeder
 MODULE  := github.com/mhdiiilham/speeder
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION) -s -w"
@@ -8,7 +9,7 @@ TARGETS := \
 	darwin/amd64 darwin/arm64 \
 	windows/amd64 windows/arm64
 
-.PHONY: build install test coverage lint fmt clean release
+.PHONY: build install test coverage lint fmt clean release wails-build wails-dev
 
 build:
 	go build $(LDFLAGS) -o bin/$(BINARY) .
@@ -41,3 +42,9 @@ release: clean
 			-o bin/$(BINARY)-$(subst /,-,$(TARGET))$(if $(findstring windows,$(TARGET)),.exe,) \
 			. ;)
 	@echo "Built: $(TARGETS)"
+
+wails-build:
+	cd ui && wails build -ldflags "-X main.version=$(VERSION) -s -w" -o ../bin/$(APP)
+
+wails-dev:
+	cd ui && wails dev

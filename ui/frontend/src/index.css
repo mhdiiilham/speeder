@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #030712;
+}
+
+/* macOS traffic-light spacing — respects the window controls region */
+header {
+  -webkit-app-region: drag;
+}
+header * {
+  -webkit-app-region: no-drag;
+}
